@@ -1,0 +1,8 @@
+{
+  "name": "Essay 默写",
+  "short_name": "Essay默写",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#f5f7fb"
+}
