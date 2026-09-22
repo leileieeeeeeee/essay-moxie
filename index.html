@@ -23,13 +23,16 @@ textarea.edit{width:100%;min-height:240px;border:1px solid #d0d5dd;border-radius
 input.title{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px}.score{font-size:22px;font-weight:800}.good{color:#067647}.bad{color:#b42318}
 .history{font-size:13px;border-top:1px solid #eee;padding:8px 0}.bottom{position:fixed;bottom:0;left:0;right:0;background:#ffffffed;backdrop-filter:blur(12px);border-top:1px solid #eaecf0;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
 .bottom>div{max-width:980px;margin:auto;display:flex;gap:8px}.hidden{display:none!important}
+.status{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:#f2f4f7;font-size:12px;color:#475467}.status.cloud{background:#ecfdf3;color:#027a48}.status.pending{background:#fffaeb;color:#b54708}
+dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;width:min(92vw,460px)}dialog::backdrop{background:#10182873}.dialogBody{padding:18px}.dialogBody h3{margin:0 0 12px}.dialogBody input{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px;margin:5px 0}.dialogActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.switchRow{display:flex;align-items:center;gap:8px;margin-top:10px}.switchRow input{width:20px;height:20px}.syncDot{width:8px;height:8px;border-radius:50%;background:#98a2b3;display:inline-block}.syncDot.ok{background:#12b76a}.syncDot.busy{background:#f79009}
 @media(max-width:560px){.practice{font-size:17px;line-height:2.5}.card{padding:14px}.wrap{padding-left:9px;padding-right:9px}.desktopText{display:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="card">
-    <div class="row"><div class="grow"><h1>Essay 默写</h1><div class="muted">离线优先 · 手机 / iPad · 数据保存在本机</div></div><button class="btn" id="libraryBtn">文章库</button></div>
+    <div class="row"><div class="grow"><h1>Essay 默写</h1><div class="muted"><span id="syncDot" class="syncDot"></span> <span id="syncText">本地模式</span></div></div><button class="btn" id="accountBtn">登录同步</button><button class="btn" id="libraryBtn">文章库</button></div>
   </div>
 
   <div id="library" class="card hidden">
@@ -45,6 +48,7 @@ input.title{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px}
     <b>添加 / 编辑作文</b>
     <input id="editTitle" class="title" placeholder="作文标题" style="margin-top:10px">
     <textarea id="editText" class="edit" placeholder="粘贴作文原文…" style="margin-top:8px"></textarea>
+    <label id="cloudChoice" class="switchRow hidden"><input id="editCloud" type="checkbox"> 保存到云端并同步成绩</label>
     <div class="row" style="margin-top:8px"><button class="btn primary" id="saveEssay">保存</button><button class="btn" id="cancelEdit">取消</button><button class="btn danger hidden" id="deleteEssay">删除</button></div>
   </div>
 
@@ -78,7 +82,11 @@ input.title{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px}
 
 <div class="bottom"><div><button class="btn grow" id="regen">重新出题</button><button class="btn primary grow" id="submit">提交批改</button></div></div>
 
-<script>
+<dialog id="authDialog"><div class="dialogBody"><h3>账号与云同步</h3><div id="signedOut"><input id="authEmail" type="email" placeholder="邮箱"><input id="authPassword" type="password" placeholder="密码（至少6位）"><div class="muted">首次使用点“注册”；如要求验证，请先在邮箱中完成确认。</div><div class="dialogActions"><button class="btn primary" id="loginBtn">登录</button><button class="btn" id="signupBtn">注册</button><button class="btn" data-close="authDialog">取消</button></div></div><div id="signedIn" class="hidden"><div id="accountEmail"></div><div class="muted" style="margin-top:6px">云端文章、成绩和错词会在联网时同步；仅本机文章不会自动上传。</div><div class="dialogActions"><button class="btn primary" id="syncNowBtn">立即同步</button><button class="btn" id="uploadAllBtn">上传全部本地文章</button><button class="btn danger" id="logoutBtn">退出登录</button><button class="btn" data-close="authDialog">关闭</button></div></div></div></dialog>
+
+<dialog id="deleteDialog"><div class="dialogBody"><h3>删除文章</h3><div id="deleteTitle" class="muted"></div><div class="dialogActions"><button class="btn danger" id="deleteEverywhere">从所有设备删除</button><button class="btn" id="deleteLocalOnly">仅从本机删除</button><button class="btn" id="detachCloud">取消同步并保留本地</button><button class="btn" data-close="deleteDialog">取消</button></div></div></dialog>
+
+<script type="text/plain" id="legacy">
 const DEFAULT = "In today’s fast-changing society, there is an ongoing debate about whether experiential learning can be effective in formal education. While some people believe that experiential learning is beneficial in high schools and colleges, others disagree with this idea. In this essay, I will explain why I strongly agree with this statement and provide examples to support my position.\n\nFirstly, experiential learning helps students develop practical abilities. This is because hands-on experience allows students to apply theoretical knowledge in real situations. Moreover, experiential learning can improve students’ competitiveness in the job market. Additionally, it helps students gain a deeper understanding of knowledge. For example, conducting experiments is an essential part of learning physics because students can observe scientific principles directly rather than simply reading about them in textbooks.\n\nOn the other hand, in some cases, some people believe that experiential learning is not efficient. For instance, it often requires more time and resources than traditional classroom teaching. However, this view overlooks the fact that experiential learning usually produces better learning outcomes and helps students retain knowledge for a longer period of time.\n\nIn conclusion, while it is true that experiential learning may require additional time and effort, its benefits far outweigh the drawbacks. Therefore, I strongly agree that experiential learning is beneficial in high schools and colleges because it promotes practical skills, deeper understanding, and greater competitiveness in the job market.";
 const KEY='essay-moxie-v2';
 let state=JSON.parse(localStorage.getItem(KEY)||'null') || {
@@ -199,4 +207,5 @@ $('importFile').onchange=async ev=>{try{let obj=JSON.parse(await ev.target.files
 renderAll();
 if('serviceWorker'in navigator && location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
 </script>
+<script src="app.js"></script>
 </body></html>
