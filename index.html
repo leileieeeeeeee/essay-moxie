@@ -23,6 +23,7 @@ textarea.edit{width:100%;min-height:240px;border:1px solid #d0d5dd;border-radius
 input.title{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px}.score{font-size:22px;font-weight:800}.good{color:#067647}.bad{color:#b42318}
 .history{font-size:13px;border-top:1px solid #eee;padding:8px 0}.bottom{position:fixed;bottom:0;left:0;right:0;background:#ffffffed;backdrop-filter:blur(12px);border-top:1px solid #eaecf0;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
 .bottom>div{max-width:980px;margin:auto;display:flex;gap:8px}.hidden{display:none!important}
+button:disabled,select:disabled{opacity:.48;cursor:not-allowed}
 .status{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:#f2f4f7;font-size:12px;color:#475467}.status.cloud{background:#ecfdf3;color:#027a48}.status.pending{background:#fffaeb;color:#b54708}
 dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;width:min(92vw,460px)}dialog::backdrop{background:#10182873}.dialogBody{padding:18px}.dialogBody h3{margin:0 0 12px}.dialogBody input{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px;margin:5px 0}.dialogActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .switchRow{display:flex;align-items:center;gap:8px;margin-top:10px}.switchRow input{width:20px;height:20px}.syncDot{width:8px;height:8px;border-radius:50%;background:#98a2b3;display:inline-block}.syncDot.ok{background:#12b76a}.syncDot.busy{background:#f79009}
@@ -64,6 +65,7 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
   <div class="card">
     <div class="row">
       <b>空白率</b>
+      <button class="pill" data-p="0">0% 看原文</button>
       <button class="pill" data-p="20">20%</button><button class="pill active" data-p="40">40%</button>
       <button class="pill" data-p="60">60%</button><button class="pill" data-p="80">80%</button><button class="pill" data-p="100">100%</button>
       <select id="mode"><option value="grid">逐词格子</option><option value="full">全文默写</option></select>

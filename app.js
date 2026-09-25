@@ -47,13 +47,14 @@ function renderPractice(){
 }
 function alignScore(expected,typed){let a=expected.map(norm).filter(Boolean),b=typed.map(norm).filter(Boolean),n=a.length,m=b.length,dp=Array.from({length:n+1},()=>Array(m+1).fill(0));for(let i=0;i<=n;i++)dp[i][0]=i;for(let j=0;j<=m;j++)dp[0][j]=j;for(let i=1;i<=n;i++)for(let j=1;j<=m;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return{score:Math.max(0,(1-dp[n][m]/Math.max(1,n))*100),distance:dp[n][m],total:n}}
 function submit(){
+  if(pct===0)return;
   let e=current(),score=0,total=0,wrong=[];
   if(pct===100&&$('mode').value==='full'){let ex=words(e.text).filter(x=>/[A-Za-z0-9]/.test(x)),ty=words($('full').value).filter(x=>/[A-Za-z0-9]/.test(x)),r=alignScore(ex,ty);score=r.score;total=r.total;for(let i=0;i<Math.min(ex.length,ty.length);i++)if(norm(ex[i])!==norm(ty[i])&&wrong.length<15){wrong.push(`${ty[i]||'∅'} → ${ex[i]}`);e.wrong[norm(ex[i])]=(e.wrong[norm(ex[i])]||0)+1}}
   else{let ins=[...document.querySelectorAll('.blank')],correct=0;total=answers.length;ins.forEach((el,i)=>{if(norm(el.value)===norm(answers[i])){correct++;el.style.borderBottomColor='#12b76a'}else{el.style.borderBottomColor='#f04438';e.wrong[norm(answers[i])]=(e.wrong[norm(answers[i])]||0)+1;if(wrong.length<15)wrong.push(`${el.value||'∅'} → ${answers[i]}`)}});score=total?correct/total*100:100}
   e.history=e.history||[];e.history.unshift({id:uid(),date:now(),pct,score});e.history=e.history.slice(0,50);markChanged(e);$('score').innerHTML=`得分 <span class="${score>=90?'good':'bad'}">${score.toFixed(1)}%</span>`;$('detail').textContent=wrong.length?'错词示例：'+wrong.join(' ｜ '):'全部正确 🎉';$('resultCard').classList.remove('hidden');renderHeader();renderHistory();renderList();$('resultCard').scrollIntoView({behavior:'smooth'})
 }
 function renderHistory(){let h=current().history||[];$('history').innerHTML=h.length?h.slice(0,8).map(x=>`<div class="history">${new Date(x.date).toLocaleString()} · ${x.pct}% 空白 · <b>${x.score.toFixed(1)}</b></div>`).join(''):'<div class="muted" style="margin-top:8px">完成一次练习后会记录在这里。</div>'}
-function updateControls(){let full=pct===100;$('mode').disabled=!full;$('mode').title=full?'选择 100% 默写方式':'仅在空白率为 100% 时可选择';if(!full)$('mode').value='grid';$('hint').disabled=full&&$('mode').value==='full'}
+function updateControls(){let full=pct===100,reading=pct===0;$('mode').disabled=!full;$('mode').title=full?'选择 100% 默写方式':'仅在空白率为 100% 时可选择';if(!full)$('mode').value='grid';$('hint').disabled=reading||(full&&$('mode').value==='full');$('submit').disabled=reading;$('regen').disabled=reading}
 function applyHint(){let first=$('hint').value==='first';document.querySelectorAll('.blank').forEach(el=>{let a=answers[Number(el.dataset.i)]||'';el.placeholder=first&&a?a[0]+'…':''})}
 function renderAll(){renderList();renderHeader();updateAccountUI();updateControls();renderPractice();renderHistory()}
 
