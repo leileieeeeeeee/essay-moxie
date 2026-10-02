@@ -1,4 +1,4 @@
-const CACHE='essay-moxie-v3.2';
+const CACHE='essay-moxie-v3.4';
 const ASSETS=['./','./index.html','./app.js','./manifest.webmanifest'];
 
 self.addEventListener('install',event=>{

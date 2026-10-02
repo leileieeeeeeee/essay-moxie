@@ -43,7 +43,41 @@ function renderPractice(){
   if(pct===100&&mode==='full'){$('practice').innerHTML='<textarea id="full" class="full" placeholder="从头默写整篇作文…" spellcheck="false"></textarea>';return}
   let toks=e.text.split(/(\s+)/),html='',hint=$('hint').value;
   toks.forEach(chunk=>{if(/^\s+$/.test(chunk)){html+=chunk.includes('\n')?chunk.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>'):' ';return}words(chunk).forEach(t=>{if(!/[A-Za-z0-9]/.test(t)){html+=esc(t);return}let hide=pct===100||shouldHide(t,e);if(hide){let i=answers.length;answers.push(t);let ph=hint==='first'?t[0]+'…':'';let w=Math.max(56,Math.min(155,t.length*9+22));html+=`<input class="blank" data-i="${i}" style="width:${w}px" placeholder="${esc(ph)}" autocomplete="off" autocapitalize="off" spellcheck="false">`}else html+=esc(t)})});
-  $('practice').innerHTML=html;let ins=[...document.querySelectorAll('.blank')];ins.forEach((el,i)=>el.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();ins[i+1]?.focus()}}));
+  $('practice').innerHTML=html;let ins=[...document.querySelectorAll('.blank')];
+  const focusNext=i=>{if(ins[i+1])ins[i+1].focus()};
+  ins.forEach((el,i)=>{
+    const backToPrevious=ev=>{
+      if(ev.isComposing||ev.keyCode===229||el.value!=='')return;
+      ev.preventDefault();
+      const previous=ins[i-1];
+      if(previous){
+        previous.focus();
+        previous.setSelectionRange(previous.value.length,previous.value.length);
+      }
+    };
+    el.addEventListener('keydown',ev=>{
+      if(ev.isComposing||ev.keyCode===229)return;
+      if(ev.key==='Backspace'){
+        backToPrevious(ev);
+        return;
+      }
+      if(ev.key==='Enter'||ev.key===' '||ev.key==='Spacebar'){
+        ev.preventDefault();
+        focusNext(i);
+      }
+    });
+    // 软键盘可能不发送 keydown；只在删除前已为空时退格，删掉最后一个字时仍留在当前格。
+    el.addEventListener('beforeinput',ev=>{
+      if(ev.inputType==='deleteContentBackward')backToPrevious(ev);
+    });
+    // 部分 iPhone/iPad 软键盘不会稳定触发空格的 keydown，用 input 事件兜底。
+    el.addEventListener('input',()=>{
+      if(/\s/.test(el.value)){
+        el.value=el.value.replace(/\s+/g,'');
+        focusNext(i);
+      }
+    });
+  });
 }
 function alignScore(expected,typed){let a=expected.map(norm).filter(Boolean),b=typed.map(norm).filter(Boolean),n=a.length,m=b.length,dp=Array.from({length:n+1},()=>Array(m+1).fill(0));for(let i=0;i<=n;i++)dp[i][0]=i;for(let j=0;j<=m;j++)dp[0][j]=j;for(let i=1;i<=n;i++)for(let j=1;j<=m;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return{score:Math.max(0,(1-dp[n][m]/Math.max(1,n))*100),distance:dp[n][m],total:n}}
 function submit(){
