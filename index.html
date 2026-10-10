@@ -28,16 +28,35 @@ button:disabled,select:disabled{opacity:.48;cursor:not-allowed}
 dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;width:min(92vw,460px)}dialog::backdrop{background:#10182873}.dialogBody{padding:18px}.dialogBody h3{margin:0 0 12px}.dialogBody input{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px;margin:5px 0}.dialogActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .switchRow{display:flex;align-items:center;gap:8px;margin-top:10px}.switchRow input{width:20px;height:20px}.syncDot{width:8px;height:8px;border-radius:50%;background:#98a2b3;display:inline-block}.syncDot.ok{background:#12b76a}.syncDot.busy{background:#f79009}
 @media(max-width:560px){.practice{font-size:17px;line-height:2.5}.card{padding:14px}.wrap{padding-left:9px;padding-right:9px}.desktopText{display:none}}
+.version{font-size:11px;color:#667085;font-weight:500;vertical-align:middle}
+.filterGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#475467;min-width:0}
+.field input,.field select{width:100%;min-width:0;background:#fff;color:#172033;border:1px solid #d0d5dd;border-radius:10px;padding:10px;font-size:16px}
+.searchField{grid-column:1/-1}.filterSummary{margin:12px 0 4px}.smallBtn{border:1px solid #d0d5dd;background:white;color:#475467;padding:8px 10px;border-radius:9px;font-size:13px;cursor:pointer}
+.essayTitle{border:0;background:none;color:#172033;font-weight:700;text-align:left;padding:3px 0;min-width:0;overflow-wrap:anywhere;cursor:pointer}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.tag{font-size:12px;background:#f2f4f7;color:#475467;padding:4px 8px;border-radius:7px;overflow-wrap:anywhere;max-width:100%}
+.groupTag{color:#175cd3;background:#eff8ff}.recentTag{color:#b54708;background:#fffaeb}.itemActions{margin-top:10px}.emptyState{padding:28px 8px;text-align:center;color:#667085;line-height:1.7}
+.editorGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+@media(max-width:560px){.filterGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.essayItem{padding:10px}.itemActions{gap:6px}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="card">
-    <div class="row"><div class="grow"><h1>Essay 默写</h1><div class="muted"><span id="syncDot" class="syncDot"></span> <span id="syncText">本地模式</span></div></div><button class="btn" id="accountBtn">登录同步</button><button class="btn" id="libraryBtn">文章库</button></div>
+    <div class="row"><div class="grow"><h1>Essay 默写 <small class="version">V3.5</small></h1><div class="muted"><span id="syncDot" class="syncDot"></span> <span id="syncText">本地模式</span></div></div><button class="btn" id="accountBtn">登录同步</button><button class="btn" id="libraryBtn">文章库</button></div>
   </div>
 
   <div id="library" class="card hidden">
-    <div class="row"><b class="grow">文章库</b><button class="btn primary" id="addBtn">＋ 添加作文</button></div>
+    <div class="row"><b class="grow">文章库</b><button class="btn primary" id="addBtn">＋ 添加文章</button></div>
+    <div class="filterGrid">
+      <label class="field searchField">搜索<input id="searchEssays" type="search" placeholder="搜索名称、分组或标签"></label>
+      <label class="field">分组<select id="filterGroup"><option value="">全部分组</option></select></label>
+      <label class="field">标签<select id="filterTag"><option value="">全部标签</option></select></label>
+      <label class="field">题库<select id="filterRecent"><option value="all">全部文章</option><option value="recent">近期题库</option><option value="other">非近期题库</option></select></label>
+      <label class="field">练习进度<select id="filterPractice"><option value="all">全部进度</option><option value="todo">今日未练</option><option value="done">今日已练</option><option value="never">从未练过</option></select></label>
+      <label class="field">排序<select id="sortEssays"><option value="date-desc">录入日期：新 → 旧</option><option value="date-asc">录入日期：旧 → 新</option><option value="name-asc">名称：A → Z</option><option value="name-desc">名称：Z → A</option></select></label>
+    </div>
+    <div class="row filterSummary"><span id="libraryCount" class="muted grow" aria-live="polite"></span><button id="resetFilters" class="smallBtn">重置筛选</button></div>
     <div id="essayList"></div>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="exportBtn">导出备份</button>
@@ -46,9 +65,15 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
   </div>
 
   <div id="editor" class="card hidden">
-    <b>添加 / 编辑作文</b>
-    <input id="editTitle" class="title" placeholder="作文标题" style="margin-top:10px">
-    <textarea id="editText" class="edit" placeholder="粘贴作文原文…" style="margin-top:8px"></textarea>
+    <b>添加 / 编辑文章</b>
+    <input id="editTitle" class="title" placeholder="文章标题" style="margin-top:10px">
+    <textarea id="editText" class="edit" placeholder="粘贴需要背诵的文章或模板…" style="margin-top:8px"></textarea>
+    <div class="editorGrid">
+      <label class="field">分组<input id="editGroup" list="groupOptions" maxlength="40" placeholder="WE / SWT / 自定义分组"><datalist id="groupOptions"></datalist></label>
+      <label class="field">录入日期<input id="editCreatedAt" type="date"></label>
+      <label class="field searchField">自定义标签<input id="editTags" placeholder="例如：教育，环境，重点复习"><span class="muted">多个标签用逗号分隔；旧文章的录入日期可以补填。</span></label>
+    </div>
+    <label class="switchRow"><input id="editRecent" type="checkbox"> 属于近期题库</label>
     <label id="cloudChoice" class="switchRow hidden"><input id="editCloud" type="checkbox"> 保存到云端并同步成绩</label>
     <div class="row" style="margin-top:8px"><button class="btn primary" id="saveEssay">保存</button><button class="btn" id="cancelEdit">取消</button><button class="btn danger hidden" id="deleteEssay">删除</button></div>
   </div>
@@ -59,6 +84,7 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
       <button class="btn" id="editCurrent">编辑文章</button>
       <button class="btn danger" id="deleteCurrent">删除文章</button>
     </div>
+    <div id="currentMeta" class="badges"></div>
     <div class="muted" id="progressText"></div>
   </div>
 
@@ -88,126 +114,5 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
 
 <dialog id="deleteDialog"><div class="dialogBody"><h3>删除文章</h3><div id="deleteTitle" class="muted"></div><div class="dialogActions"><button class="btn danger" id="deleteEverywhere">从所有设备删除</button><button class="btn" id="deleteLocalOnly">仅从本机删除</button><button class="btn" id="detachCloud">取消同步并保留本地</button><button class="btn" data-close="deleteDialog">取消</button></div></div></dialog>
 
-<script type="text/plain" id="legacy">
-const DEFAULT = "In today’s fast-changing society, there is an ongoing debate about whether experiential learning can be effective in formal education. While some people believe that experiential learning is beneficial in high schools and colleges, others disagree with this idea. In this essay, I will explain why I strongly agree with this statement and provide examples to support my position.\n\nFirstly, experiential learning helps students develop practical abilities. This is because hands-on experience allows students to apply theoretical knowledge in real situations. Moreover, experiential learning can improve students’ competitiveness in the job market. Additionally, it helps students gain a deeper understanding of knowledge. For example, conducting experiments is an essential part of learning physics because students can observe scientific principles directly rather than simply reading about them in textbooks.\n\nOn the other hand, in some cases, some people believe that experiential learning is not efficient. For instance, it often requires more time and resources than traditional classroom teaching. However, this view overlooks the fact that experiential learning usually produces better learning outcomes and helps students retain knowledge for a longer period of time.\n\nIn conclusion, while it is true that experiential learning may require additional time and effort, its benefits far outweigh the drawbacks. Therefore, I strongly agree that experiential learning is beneficial in high schools and colleges because it promotes practical skills, deeper understanding, and greater competitiveness in the job market.";
-const KEY='essay-moxie-v2';
-let state=JSON.parse(localStorage.getItem(KEY)||'null') || {
-  essays:[{id:'demo',title:'Experiential Learning',text:DEFAULT,history:[],wrong:{}}],
-  current:'demo'
-};
-let pct=40, answers=[], editing=null, wrongPriority=false;
-const $=id=>document.getElementById(id);
-function save(){localStorage.setItem(KEY,JSON.stringify(state))}
-function current(){return state.essays.find(x=>x.id===state.current)||state.essays[0]}
-function words(s){return s.match(/[A-Za-z0-9]+(?:[’'-][A-Za-z0-9]+)*|[^\sA-Za-z0-9]/g)||[]}
-function norm(s){return (s||'').toLowerCase().replace(/[’]/g,"'").replace(/[^a-z0-9'-]/g,'')}
-function esc(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function renderList(){
-  $('essayList').innerHTML=state.essays.map(e=>`<div class="essayItem ${e.id===state.current?'active':''}" data-id="${e.id}"><b>${esc(e.title)}</b><div class="muted">${e.history.length} 次练习 · ${words(e.text).filter(x=>/[A-Za-z0-9]/.test(x)).length} 词</div></div>`).join('');
-  document.querySelectorAll('.essayItem').forEach(el=>el.onclick=()=>{state.current=el.dataset.id;save();renderAll();$('library').classList.add('hidden')})
-}
-function renderHeader(){
-  let e=current(); $('currentTitle').textContent=e.title;
-  let h=e.history||[]; $('progressText').textContent=h.length?`最近：${h[0].pct}% 空白 · ${h[0].score.toFixed(1)} 分`:'还没有练习记录';
-}
-function shouldHide(token,e){
-  if(!/[A-Za-z0-9]/.test(token))return false;
-  let base=pct/100;
-  if(wrongPriority && (e.wrong[norm(token)]||0)>0) base=Math.min(1,base+0.35);
-  return Math.random()<base;
-}
-function renderPractice(){
-  answers=[];$('resultCard').classList.add('hidden');
-  let e=current(), mode=$('mode').value;
-  if(pct===100 && mode==='full'){
-    $('practice').innerHTML='<textarea id="full" class="full" placeholder="从头默写整篇作文…" spellcheck="false"></textarea>';return;
-  }
-  let toks=e.text.split(/(\s+)/), html='', hint=$('hint').value;
-  toks.forEach(chunk=>{
-    if(/^\s+$/.test(chunk)){html+=chunk.includes('\n')?chunk.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>'):' ';return}
-    let parts=words(chunk);
-    parts.forEach(t=>{
-      if(!/[A-Za-z0-9]/.test(t)){html+=esc(t);return}
-      let hide=pct===100?true:shouldHide(t,e);
-      if(hide){
-        let i=answers.length;answers.push(t);
-        let ph=hint==='first'?t[0]+'…':'';
-        let w=Math.max(56,Math.min(155,t.length*9+22));
-        html+=`<input class="blank" data-i="${i}" style="width:${w}px" placeholder="${esc(ph)}" autocomplete="off" autocapitalize="off" spellcheck="false">`;
-      }else html+=esc(t)
-    })
-  });
-  $('practice').innerHTML=html;
-  let ins=[...document.querySelectorAll('.blank')];
-  ins.forEach((el,i)=>el.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();ins[i+1]?.focus()}}))
-}
-function alignScore(expected,typed){
-  let a=expected.map(norm).filter(Boolean), b=typed.map(norm).filter(Boolean), n=a.length,m=b.length;
-  let dp=Array.from({length:n+1},()=>Array(m+1).fill(0));
-  for(let i=0;i<=n;i++)dp[i][0]=i; for(let j=0;j<=m;j++)dp[0][j]=j;
-  for(let i=1;i<=n;i++)for(let j=1;j<=m;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
-  return {score:Math.max(0,(1-dp[n][m]/Math.max(1,n))*100),distance:dp[n][m],total:n}
-}
-function submit(){
-  let e=current(), score=0,total=0,wrong=[];
-  if(pct===100 && $('mode').value==='full'){
-    let ex=words(e.text).filter(x=>/[A-Za-z0-9]/.test(x)), ty=words($('full').value).filter(x=>/[A-Za-z0-9]/.test(x));
-    let r=alignScore(ex,ty);score=r.score;total=r.total;
-    for(let i=0;i<Math.min(ex.length,ty.length);i++)if(norm(ex[i])!==norm(ty[i])&&wrong.length<15){wrong.push(`${ty[i]||'∅'} → ${ex[i]}`);e.wrong[norm(ex[i])]=(e.wrong[norm(ex[i])]||0)+1}
-  }else{
-    let ins=[...document.querySelectorAll('.blank')],correct=0;total=answers.length;
-    ins.forEach((el,i)=>{if(norm(el.value)===norm(answers[i])){correct++;el.style.borderBottomColor='#12b76a'}else{el.style.borderBottomColor='#f04438';e.wrong[norm(answers[i])]=(e.wrong[norm(answers[i])]||0)+1;if(wrong.length<15)wrong.push(`${el.value||'∅'} → ${answers[i]}`)}});score=total?correct/total*100:100
-  }
-  e.history=e.history||[];e.history.unshift({date:new Date().toISOString(),pct,score});e.history=e.history.slice(0,50);save();
-  $('score').innerHTML=`得分 <span class="${score>=90?'good':'bad'}">${score.toFixed(1)}%</span>`;
-  $('detail').textContent=wrong.length?'错词示例：'+wrong.join(' ｜ '):'全部正确 🎉';
-  $('resultCard').classList.remove('hidden');renderHeader();renderHistory();$('resultCard').scrollIntoView({behavior:'smooth'})
-}
-function renderHistory(){
-  let h=current().history||[];
-  $('history').innerHTML=h.length?h.slice(0,8).map(x=>`<div class="history">${new Date(x.date).toLocaleString()} · ${x.pct}% 空白 · <b>${x.score.toFixed(1)}</b></div>`).join(''):'<div class="muted" style="margin-top:8px">完成一次练习后会记录在这里。</div>'
-}
-function updateControls(){
-  const isFullRate=pct===100;
-  $('mode').disabled=!isFullRate;
-  $('mode').title=isFullRate?'选择 100% 默写方式':'仅在空白率为 100% 时可选择';
-  if(!isFullRate)$('mode').value='grid';
-  $('hint').disabled=isFullRate && $('mode').value==='full';
-}
-function applyHint(){
-  const first=$('hint').value==='first';
-  document.querySelectorAll('.blank').forEach(el=>{
-    const answer=answers[Number(el.dataset.i)]||'';
-    el.placeholder=first && answer ? answer[0]+'…' : '';
-  });
-}
-function renderAll(){renderList();renderHeader();updateControls();renderPractice();renderHistory()}
-document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{pct=+b.dataset.p;document.querySelectorAll('[data-p]').forEach(x=>x.classList.toggle('active',x===b));updateControls();renderPractice()});
-$('hint').onchange=applyHint;
-$('mode').onchange=()=>{updateControls();renderPractice()};
-$('regen').onclick=renderPractice;$('submit').onclick=submit;
-$('libraryBtn').onclick=()=>$('library').classList.toggle('hidden');
-$('wrongBtn').onclick=()=>{wrongPriority=!wrongPriority;$('wrongBtn').classList.toggle('primary',wrongPriority);renderPractice()};
-$('addBtn').onclick=()=>{editing=null;$('editTitle').value='';$('editText').value='';$('deleteEssay').classList.add('hidden');$('editor').classList.remove('hidden')};
-$('cancelEdit').onclick=()=>$('editor').classList.add('hidden');
-$('saveEssay').onclick=()=>{let title=$('editTitle').value.trim(),text=$('editText').value.trim();if(!title||!text)return alert('请填写标题和作文原文');if(editing){let e=state.essays.find(x=>x.id===editing);e.title=title;e.text=text}else{let id='e'+Date.now();state.essays.unshift({id,title,text,history:[],wrong:{}});state.current=id}save();$('editor').classList.add('hidden');renderAll()};
-function openCurrentEditor(){let e=current();editing=e.id;$('editTitle').value=e.title;$('editText').value=e.text;$('deleteEssay').classList.toggle('hidden',state.essays.length<=1);$('editor').classList.remove('hidden')}
-function deleteArticle(id){
-  if(state.essays.length<=1)return alert('至少需要保留一篇文章。请先添加新文章，再删除这一篇。');
-  let e=state.essays.find(x=>x.id===id);if(!e)return;
-  if(confirm(`确定删除《${e.title}》吗？该文章的成绩和错词记录也会一起删除。`)){
-    state.essays=state.essays.filter(x=>x.id!==id);state.current=state.essays[0].id;save();$('editor').classList.add('hidden');renderAll()
-  }
-}
-$('currentTitle').onclick=openCurrentEditor;
-$('editCurrent').onclick=openCurrentEditor;
-$('deleteCurrent').onclick=()=>deleteArticle(current().id);
-$('deleteEssay').onclick=()=>deleteArticle(editing);
-$('clearHistory').onclick=()=>{let e=current();if(!(e.history||[]).length)return alert('当前文章还没有成绩记录。');if(confirm(`确定清空《${e.title}》的全部成绩记录吗？`)){e.history=[];save();renderHeader();renderHistory()}};
-$('exportBtn').onclick=()=>{let blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='essay-moxie-backup.json';a.click();URL.revokeObjectURL(a.href)};
-$('importFile').onchange=async ev=>{try{let obj=JSON.parse(await ev.target.files[0].text());if(!obj.essays?.length)throw 0;state=obj;save();renderAll();alert('导入成功')}catch{alert('备份文件无效')}};
-renderAll();
-if('serviceWorker'in navigator && location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
-</script>
-<script src="app.js"></script>
+<script src="app.js?v=35"></script>
 </body></html>
