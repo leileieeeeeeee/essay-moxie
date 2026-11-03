@@ -37,17 +37,33 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
 .badges{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.tag{font-size:12px;background:#f2f4f7;color:#475467;padding:4px 8px;border-radius:7px;overflow-wrap:anywhere;max-width:100%}
 .groupTag{color:#175cd3;background:#eff8ff}.recentTag{color:#b54708;background:#fffaeb}.itemActions{margin-top:10px}.emptyState{padding:28px 8px;text-align:center;color:#667085;line-height:1.7}
 .editorGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.weSection{margin:16px 0;padding:14px;border:1px solid #dbe5f5;border-radius:14px;background:#f8faff}
+.weSection p,.templateHelp{font-size:13px;line-height:1.7;color:#475467;margin:8px 0}
+.wePreview{white-space:pre-wrap;font:17px/2.1 Georgia,serif;max-height:340px;overflow:auto;border:1px solid #d0d5dd;border-radius:10px;padding:12px;background:white;margin-top:12px}
+.markWord{font:inherit;line-height:1.7;padding:1px 2px;margin:2px 0;border:0;border-radius:4px;cursor:pointer}
+.markWord.isTemplate,.legendTemplate{background:#dbeafe;color:#154caa}.markWord.isContent,.legendContent{background:#fff3df;color:#74430e}
+.legendTemplate,.legendContent{padding:3px 7px;border-radius:5px;font-size:13px}
+.markWord:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.scopeRow{margin-bottom:12px}.scopeSummary{margin-top:12px;line-height:1.6}
+#templateDialog{width:min(94vw,760px);max-height:90vh;overflow:auto}.templateSlot{padding:14px 0;border-top:1px solid #eaecf0}.templateSlot .edit{min-height:150px;font-size:16px}.templateSlot .field+.field{margin-top:10px}
+.richToolbar{margin-top:12px;padding:10px;border:1px solid #d0d5dd;border-bottom:0;border-radius:12px 12px 0 0;background:#f8fafc}
+.richEditor{min-height:240px;max-height:520px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #d0d5dd;border-radius:0 0 12px 12px;padding:14px;font-size:17px;line-height:1.8;background:#fff;font-weight:400}
+.richEditor:empty:before{content:attr(data-placeholder);color:#98a2b3;pointer-events:none}.richEditor:focus{outline:2px solid #84adff;outline-offset:1px}
+.formatSettings{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-top:10px}.formatSettings .field{flex:1;min-width:180px}.formatSettings .switchRow{margin:0;min-height:44px}
+.formatHelp{margin:10px 0;line-height:1.65}.formatError{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 0;border-top:1px solid #fecaca}.formatError .grow{min-width:120px;overflow-wrap:anywhere}
+#formatErrors{padding:10px;background:#fff4f3;border:1px solid #fda29b;border-radius:12px;margin-top:8px}.markWord.isInvalid{background:#fee4e2;color:#b42318;text-decoration:underline wavy}
+details>summary{cursor:pointer;color:#475467;font-size:14px;padding:8px 0}details .scopeRow{margin-top:8px}
 @media(max-width:560px){.filterGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.essayItem{padding:10px}.itemActions{gap:6px}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="card">
-    <div class="row"><div class="grow"><h1>Essay 默写 <small class="version">V3.5</small></h1><div class="muted"><span id="syncDot" class="syncDot"></span> <span id="syncText">本地模式</span></div></div><button class="btn" id="accountBtn">登录同步</button><button class="btn" id="libraryBtn">文章库</button></div>
+    <div class="row"><div class="grow"><h1>Essay 默写 <small class="version">V3.7.1</small></h1><div class="muted"><span id="syncDot" class="syncDot"></span> <span id="syncText">本地模式</span></div></div><button class="btn" id="accountBtn">登录同步</button><button class="btn" id="libraryBtn">文章库</button></div>
   </div>
 
   <div id="library" class="card hidden">
-    <div class="row"><b class="grow">文章库</b><button class="btn primary" id="addBtn">＋ 添加文章</button></div>
+    <div class="row"><b class="grow">文章库</b><button class="btn" id="libraryTemplates">WE 四套模板</button><button class="btn primary" id="addBtn">＋ 添加文章</button></div>
     <div class="filterGrid">
       <label class="field searchField">搜索<input id="searchEssays" type="search" placeholder="搜索名称、分组或标签"></label>
       <label class="field">分组<select id="filterGroup"><option value="">全部分组</option></select></label>
@@ -67,13 +83,26 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
   <div id="editor" class="card hidden">
     <b>添加 / 编辑文章</b>
     <input id="editTitle" class="title" placeholder="文章标题" style="margin-top:10px">
-    <textarea id="editText" class="edit" placeholder="粘贴需要背诵的文章或模板…" style="margin-top:8px"></textarea>
+    <div class="richToolbar row" role="toolbar" aria-label="模板文字格式">
+      <button type="button" class="smallBtn" data-format="b"><b>B</b> 加粗模板</button><button type="button" class="smallBtn" data-format="i"><i>I</i> 斜体模板</button><button type="button" class="smallBtn" data-format="u"><u>U</u> 下划线模板</button><button type="button" class="smallBtn" data-format="font">模板字体</button><button type="button" class="smallBtn" data-format="content">设为内容</button><button type="button" class="smallBtn" id="richUndo">撤销</button><button type="button" class="smallBtn" id="richRedo">重做</button>
+    </div>
+    <div id="editRich" class="richEditor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="文章原文与模板格式" data-placeholder="在这里输入，或粘贴带格式的文章。选中模板文字后设置加粗等格式。" spellcheck="false"></div>
+    <textarea id="editText" hidden aria-hidden="true"></textarea>
+    <div class="formatSettings"><label class="field">正文字体（粘贴后请核对）<select id="bodyFont"><option value="">默认正文字体</option></select></label><label class="switchRow"><input type="checkbox" id="detectFonts" checked> 不同字体也算模板</label></div>
+    <p id="formatHelp" class="muted formatHelp">加粗、斜体、下划线或非正文字体代表模板。一个单词的格式必须一致。</p>
+    <div id="formatStatus" class="muted" role="status" aria-live="polite"></div><div id="formatErrors" class="hidden" aria-label="需要修正的单词"></div>
     <div class="editorGrid">
       <label class="field">分组<input id="editGroup" list="groupOptions" maxlength="40" placeholder="WE / SWT / 自定义分组"><datalist id="groupOptions"></datalist></label>
       <label class="field">录入日期<input id="editCreatedAt" type="date"></label>
       <label class="field searchField">自定义标签<input id="editTags" placeholder="例如：教育，环境，重点复习"><span class="muted">多个标签用逗号分隔；旧文章的录入日期可以补填。</span></label>
     </div>
     <label class="switchRow"><input id="editRecent" type="checkbox"> 属于近期题库</label>
+    <section id="weEditor" class="weSection">
+      <div class="row"><b class="grow">模板 / 内容识别结果</b><span class="muted" id="weCounts"></span></div>
+      <details><summary>使用已保存的四套模板自动加粗（可选）</summary><div class="row"><label class="field grow">本篇使用的模板<select id="weTemplateSelect"><option value="">手动标记（不选模板）</option></select></label><button type="button" id="weIdentify" class="btn">按模板识别</button><button type="button" class="smallBtn" id="weTemplatesBtn">管理四套模板</button></div><p id="weMatchMessage" role="status"></p></details>
+      <details><summary>查看颜色预览 / 点击整词修改</summary><div class="row"><span class="legendTemplate">蓝色：模板</span><span class="legendContent">浅橙：内容</span><span class="bad muted">红色：格式不一致</span></div><div id="wePreview" class="wePreview" aria-label="模板与内容标记预览"></div></details>
+      <p>请核对识别结果再保存。格式混用的单词必须先修正；正常正文不用设置特殊格式。</p>
+    </section>
     <label id="cloudChoice" class="switchRow hidden"><input id="editCloud" type="checkbox"> 保存到云端并同步成绩</label>
     <div class="row" style="margin-top:8px"><button class="btn primary" id="saveEssay">保存</button><button class="btn" id="cancelEdit">取消</button><button class="btn danger hidden" id="deleteEssay">删除</button></div>
   </div>
@@ -89,6 +118,11 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
   </div>
 
   <div class="card">
+    <div id="weScope">
+      <div class="row scopeRow"><b>模板显示</b><button class="pill active" data-template-visible="show" aria-pressed="true">显示模板</button><button class="pill" data-template-visible="hide" aria-pressed="false">隐藏模板</button></div>
+      <div id="weSetupHint" class="row scopeRow"><span class="muted grow" id="weSetupText">在编辑文章中标记模板并保存，即可隐藏模板。</span><button class="smallBtn" id="weSetup">设置标记</button></div>
+      <details id="advancedScopes"><summary>更多练习设置（模板单练等）</summary><div class="row scopeRow"><button class="pill active" data-scope="all" aria-pressed="true">全文</button><button class="pill" data-scope="template" aria-pressed="false">模板</button><button class="pill" data-scope="content" aria-pressed="false">内容</button></div></details>
+    </div>
     <div class="row">
       <b>空白率</b>
       <button class="pill" data-p="0">0% 看原文</button>
@@ -97,6 +131,7 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
       <select id="mode"><option value="grid">逐词格子</option><option value="full">全文默写</option></select>
       <select id="hint"><option value="none">无提示</option><option value="first">首字母</option></select>
     </div>
+    <div id="scopeSummary" class="muted scopeSummary" aria-live="polite"></div>
   </div>
 
   <div class="card"><div id="practice" class="practice"></div></div>
@@ -114,5 +149,9 @@ dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;wi
 
 <dialog id="deleteDialog"><div class="dialogBody"><h3>删除文章</h3><div id="deleteTitle" class="muted"></div><div class="dialogActions"><button class="btn danger" id="deleteEverywhere">从所有设备删除</button><button class="btn" id="deleteLocalOnly">仅从本机删除</button><button class="btn" id="detachCloud">取消同步并保留本地</button><button class="btn" data-close="deleteDialog">取消</button></div></div></dialog>
 
-<script src="app.js?v=35"></script>
+<dialog id="templateDialog"><div class="dialogBody"><h3>WE 四套模板</h3><p class="templateHelp">把每套模板的固定句式粘贴进来，用 <code>{{主题}}</code>、<code>{{论点}}</code> 等占位符替代每篇会变化的内容。例如：<code>In conclusion, {{结论}}.</code></p><p class="templateHelp">保存模板后，回到文章编辑页选择模板并点击“按模板识别”。更新模板不会自动改动已经保存的文章标记。</p><div id="templateSlots"></div><p class="templateHelp">文章开启云同步后，其标记和使用的模板版本随文章同步；尚未用于文章的模板请通过“导出备份”保存。</p><div class="dialogActions"><button class="btn primary" id="saveTemplates">保存四套模板</button><button class="btn" data-close="templateDialog">取消</button></div></div></dialog>
+
+<script src="rich.js?v=371"></script>
+<script src="we.js?v=371"></script>
+<script src="app.js?v=371"></script>
 </body></html>

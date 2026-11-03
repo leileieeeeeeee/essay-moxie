@@ -6,7 +6,7 @@ const $=id=>document.getElementById(id),now=()=>new Date().toISOString();
 const uid=()=>crypto.randomUUID?crypto.randomUUID():'id-'+Date.now()+'-'+Math.random().toString(16).slice(2);
 let state=JSON.parse(localStorage.getItem(KEY)||'null')||{essays:[{id:'demo',title:'Experiential Learning',text:DEFAULT,history:[],wrong:{},createdAt:now()}],current:'demo'};
 let auth=JSON.parse(localStorage.getItem(AUTH_KEY)||'null');
-let pct=40,answers=[],editing=null,deleteTarget=null,wrongPriority=false,syncing=false;
+let pct=40,answers=[],editing=null,deleteTarget=null,wrongPriority=false,syncing=false,practiceSignature='';
 
 const VIEW_KEY='essay-moxie-library-view-v1';
 const DEFAULT_VIEW={search:'',group:'',tag:'',recent:'all',practice:'all',sort:'date-desc'};
@@ -32,6 +32,14 @@ function validDate(value){
 }
 function normalizeEssay(e,fallback={}){
   const field=key=>Object.prototype.hasOwnProperty.call(e,key)?e[key]:fallback[key];
+  const text=String(e.text||'');
+  let weParts=WE.normalizeParts(field('weParts'),text),weFormat=Rich.normalize(field('weFormat'),text);
+  if(weFormat){
+    const report=Rich.analyze(weFormat);
+    if(report.errors.length)weParts=null;
+    // 旧设备可能只更新整词标记；此时沿用新的标记，编辑时重新生成加粗格式。
+    else if(!weParts||JSON.stringify(report.templateWords)!==JSON.stringify(weParts.templateWords))weFormat=null;
+  }
   // 旧版只保存更新时间，不能当作录入时间；更早的时间戳 ID 可恢复原录入时间。
   const oldId=/^e(\d{13})$/.exec(e.id||'');
   const storedDate=field('createdAt');
@@ -39,7 +47,8 @@ function normalizeEssay(e,fallback={}){
   return {...e,id:e.id||uid(),title:String(e.title||'未命名文章'),text:String(e.text||''),
     history:Array.isArray(e.history)?e.history:[],wrong:e.wrong&&typeof e.wrong==='object'?e.wrong:{},
     cloud:!!e.cloud,dirty:!!e.dirty,updatedAt:validDate(e.updatedAt)||now(),
-    group:cleanGroup(field('group')),tags:cleanTags(field('tags')),recent:field('recent')===true,createdAt};
+    group:cleanGroup(field('group')),tags:cleanTags(field('tags')),recent:field('recent')===true,createdAt,
+    weParts,weFormat};
 }
 function emptyEssay(){
   return normalizeEssay({id:'local-'+uid(),title:'新文章',text:'请点击编辑文章并粘贴原文。',createdAt:now()});
@@ -48,6 +57,7 @@ function normalizeState(value){
   const essays=(Array.isArray(value.essays)?value.essays:[]).map(e=>normalizeEssay(e));
   if(!essays.length)essays.push(emptyEssay());
   return {...value,essays,current:essays.some(e=>e.id===value.current)?value.current:essays[0].id,
+    weTemplates:WE.normalizeTemplates(value.weTemplates,essays),
     hiddenCloud:Array.isArray(value.hiddenCloud)?value.hiddenCloud:[],
     pendingDeletes:Array.isArray(value.pendingDeletes)?value.pendingDeletes:[]};
 }
@@ -172,35 +182,65 @@ function renderHeader(){
   const e=current(),h=e.history||[];
   $('currentTitle').textContent=e.title;
   $('currentMeta').innerHTML=essayBadges(e);
-  $('progressText').textContent=(e.cloud?'☁ 云同步 · ':'仅本机 · ')+(h.length?`最近：${h[0].pct}% 空白 · ${h[0].score.toFixed(1)} 分`:'还没有练习记录');
+  $('progressText').textContent=(e.cloud?'☁ 云同步 · ':'仅本机 · ')+(h.length?`最近：${WE.historyLabel(h[0])} ${h[0].pct}% 空白 · ${h[0].score.toFixed(1)} 分`:'还没有练习记录');
 }
 
-function shouldHide(token,e){if(pct===0||!/[A-Za-z0-9]/.test(token))return false;let base=pct/100;if(wrongPriority&&(e.wrong[norm(token)]||0)>0)base=Math.min(1,base+.35);return Math.random()<base}
+let blankRevealFrame=0;
+function revealActiveBlank(){
+  const el=document.activeElement;
+  if(!el?.matches('.blank')||!el.isConnected)return;
+  const rect=el.getBoundingClientRect();
+  if(!rect.width||!rect.height)return;
+  // 使用实际可见视口，并扣除底部操作栏；桌面浏览器原生 focus 不会避开固定栏。
+  const viewport=window.visualViewport,viewportTop=viewport?.offsetTop||0;
+  const top=viewportTop+20;
+  let bottom=viewportTop+(viewport?.height||window.innerHeight)-20;
+  const toolbar=document.querySelector('.bottom')?.getBoundingClientRect();
+  if(toolbar?.height>0&&toolbar.top<bottom&&toolbar.bottom>top)bottom=Math.min(bottom,toolbar.top-20);
+  if(bottom-top<rect.height+20)return;
+  // 已完整可见时不滚动；超出可用区域时将当前格移至中部。
+  if(rect.top<top||rect.bottom>bottom){
+    window.scrollBy({top:rect.top+rect.height/2-(top+bottom)/2,left:0,behavior:'auto'});
+  }
+}
+function scheduleBlankReveal(){
+  cancelAnimationFrame(blankRevealFrame);
+  blankRevealFrame=requestAnimationFrame(revealActiveBlank);
+}
+function focusBlank(el,atEnd=false){
+  if(!el)return;
+  el.focus({preventScroll:true});
+  if(atEnd)el.setSelectionRange(el.value.length,el.value.length);
+  revealActiveBlank();scheduleBlankReveal();
+}
+window.addEventListener('resize',scheduleBlankReveal);
+window.visualViewport?.addEventListener('resize',scheduleBlankReveal);
+
 function renderPractice(){
   answers=[];$('resultCard').classList.add('hidden');let e=current(),mode=$('mode').value;
-  if(pct===100&&mode==='full'){$('practice').innerHTML='<textarea id="full" class="full" placeholder="从头默写整篇文章…" spellcheck="false"></textarea>';return}
+  practiceSignature=WE.signature();
+  if(pct===100&&WE.scope()==='all'&&mode==='full'){$('practice').innerHTML='<textarea id="full" class="full" placeholder="从头默写整篇文章…" spellcheck="false"></textarea>';WE.describe(WE.pool().length);return}
+  const hidden=WE.pick(e);WE.describe(hidden.size);
   let html='',hint=$('hint').value;
-  tokens(e.text).forEach(t=>{
+  WE.practiceTokens(e).forEach(({text:t,index:wordIndex})=>{
     if(/^\s+$/.test(t)){html+=t.includes('\n')?t.replace(/\n/g,'<br>'):' ';return}
     if(!/[A-Za-z0-9]/.test(t)){html+=esc(t);return}
-    if(pct===100||shouldHide(t,e)){
+    if(hidden.has(wordIndex)){
       const i=answers.length;answers.push(t);
       const ph=hint==='first'?t[0]+'…':'',w=Math.max(56,Math.min(155,t.length*9+22));
-      html+=`<input class="blank" data-i="${i}" aria-label="第 ${i+1} 个填空" style="width:${w}px" placeholder="${esc(ph)}" autocomplete="off" autocapitalize="off" spellcheck="false">`;
+      html+=`<input class="blank" data-i="${i}" data-word="${wordIndex}" aria-label="第 ${i+1} 个填空" style="width:${w}px" placeholder="${esc(ph)}" autocomplete="off" autocapitalize="off" spellcheck="false">`;
     }else html+=esc(t);
   });
 
-  $('practice').innerHTML=html;let ins=[...document.querySelectorAll('.blank')];
-  const focusNext=i=>{if(ins[i+1])ins[i+1].focus()};
+  $('practice').innerHTML=html||(WE.hiding()?'<div class="emptyState">模板已隐藏，本篇没有内容词。</div>':'');let ins=[...document.querySelectorAll('.blank')];
+  const focusNext=i=>focusBlank(ins[i+1]);
   ins.forEach((el,i)=>{
+    el.addEventListener('focus',scheduleBlankReveal);
     const backToPrevious=ev=>{
       if(ev.isComposing||ev.keyCode===229||el.value!=='')return;
       ev.preventDefault();
       const previous=ins[i-1];
-      if(previous){
-        previous.focus();
-        previous.setSelectionRange(previous.value.length,previous.value.length);
-      }
+      if(previous)focusBlank(previous,true);
     };
     el.addEventListener('keydown',ev=>{
       if(ev.isComposing||ev.keyCode===229)return;
@@ -229,21 +269,27 @@ function renderPractice(){
 }
 function alignScore(expected,typed){let a=expected.map(norm).filter(Boolean),b=typed.map(norm).filter(Boolean),n=a.length,m=b.length,dp=Array.from({length:n+1},()=>Array(m+1).fill(0));for(let i=0;i<=n;i++)dp[i][0]=i;for(let j=0;j<=m;j++)dp[0][j]=j;for(let i=1;i<=n;i++)for(let j=1;j<=m;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return{score:Math.max(0,(1-dp[n][m]/Math.max(1,n))*100),distance:dp[n][m],total:n}}
 function submit(){
-  if(pct===0)return;
+  if(pct===0||!WE.pool().length)return;
   let e=current(),score=0,total=0,wrong=[];
-  if(pct===100&&$('mode').value==='full'){let ex=words(e.text).filter(x=>/[A-Za-z0-9]/.test(x)),ty=words($('full').value).filter(x=>/[A-Za-z0-9]/.test(x)),r=alignScore(ex,ty);score=r.score;total=r.total;for(let i=0;i<Math.min(ex.length,ty.length);i++)if(norm(ex[i])!==norm(ty[i])&&wrong.length<15){wrong.push(`${ty[i]||'∅'} → ${ex[i]}`);e.wrong[norm(ex[i])]=(e.wrong[norm(ex[i])]||0)+1}}
+  if(pct===100&&WE.scope()==='all'&&$('mode').value==='full'){let ex=words(e.text).filter(x=>/[A-Za-z0-9]/.test(x)),ty=words($('full').value).filter(x=>/[A-Za-z0-9]/.test(x)),r=alignScore(ex,ty);score=r.score;total=r.total;for(let i=0;i<Math.min(ex.length,ty.length);i++)if(norm(ex[i])!==norm(ty[i])&&wrong.length<15){wrong.push(`${ty[i]||'∅'} → ${ex[i]}`);e.wrong[norm(ex[i])]=(e.wrong[norm(ex[i])]||0)+1}}
   else{let ins=[...document.querySelectorAll('.blank')],correct=0;total=answers.length;ins.forEach((el,i)=>{if(norm(el.value)===norm(answers[i])){correct++;el.style.borderBottomColor='#12b76a'}else{el.style.borderBottomColor='#f04438';e.wrong[norm(answers[i])]=(e.wrong[norm(answers[i])]||0)+1;if(wrong.length<15)wrong.push(`${el.value||'∅'} → ${answers[i]}`)}});score=total?correct/total*100:100}
-  e.history=e.history||[];e.history.unshift({id:uid(),date:now(),pct,score});e.history=e.history.slice(0,50);markChanged(e);$('score').innerHTML=`得分 <span class="${score>=90?'good':'bad'}">${score.toFixed(1)}%</span>`;$('detail').textContent=wrong.length?'错词示例：'+wrong.join(' ｜ '):'全部正确 🎉';$('resultCard').classList.remove('hidden');renderHeader();renderHistory();renderList();$('resultCard').scrollIntoView({behavior:'smooth'})
+  e.history=e.history||[];e.history.unshift({id:uid(),date:now(),scope:WE.scope(),hideTemplate:WE.hiding(),pct,score,blankCount:total,eligibleCount:WE.pool().length});e.history=e.history.slice(0,50);markChanged(e);$('score').innerHTML=`得分 <span class="${score>=90?'good':'bad'}">${score.toFixed(1)}%</span>`;$('detail').textContent=wrong.length?'错词示例：'+wrong.join(' ｜ '):'全部正确 🎉';$('resultCard').classList.remove('hidden');renderHeader();renderHistory();renderList();$('resultCard').scrollIntoView({behavior:'smooth'})
 }
-function renderHistory(){let h=current().history||[];$('history').innerHTML=h.length?h.slice(0,8).map(x=>`<div class="history">${new Date(x.date).toLocaleString()} · ${x.pct}% 空白 · <b>${x.score.toFixed(1)}</b></div>`).join(''):'<div class="muted" style="margin-top:8px">完成一次练习后会记录在这里。</div>'}
-function updateControls(){let full=pct===100,reading=pct===0;$('mode').disabled=!full;$('mode').title=full?'选择 100% 默写方式':'仅在空白率为 100% 时可选择';if(!full)$('mode').value='grid';$('hint').disabled=reading||(full&&$('mode').value==='full');$('submit').disabled=reading;$('regen').disabled=reading}
+function renderHistory(){let h=current().history||[];$('history').innerHTML=h.length?h.slice(0,8).map(x=>`<div class="history">${new Date(x.date).toLocaleString()} · ${WE.historyLabel(x)} ${x.pct}% 空白 · <b>${x.score.toFixed(1)}</b></div>`).join(''):'<div class="muted" style="margin-top:8px">完成一次练习后会记录在这里。</div>'}
+function updateControls(){
+  WE.updateScope();
+  const full=pct===100&&WE.scope()==='all',reading=pct===0,empty=!WE.pool().length;
+  $('mode').disabled=!full;$('mode').title=full?'选择 100% 默写方式':'仅在全文范围、空白率 100% 时可选择';
+  if(!full)$('mode').value='grid';
+  $('hint').disabled=reading||empty||(full&&$('mode').value==='full');$('submit').disabled=reading||empty;$('regen').disabled=reading||empty;
+}
 function applyHint(){let first=$('hint').value==='first';document.querySelectorAll('.blank').forEach(el=>{let a=answers[Number(el.dataset.i)]||'';el.placeholder=first&&a?a[0]+'…':''})}
-function renderAll(refreshPractice=true){renderList();renderHeader();updateAccountUI();updateControls();if(refreshPractice)renderPractice();renderHistory()}
+function renderAll(refreshPractice=true){renderList();renderHeader();updateAccountUI();updateControls();if(refreshPractice||practiceSignature!==WE.signature())renderPractice();renderHistory()}
 
 async function authRequest(path,body){let r=await fetch(SUPABASE_URL+path,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.msg||data.message||data.error_description||'请求失败');return data}
 async function ensureToken(){if(!auth)return false;let p=jwtPayload(auth.access_token);if((p.exp||0)*1000>Date.now()+60000)return true;try{let d=await authRequest('/auth/v1/token?grant_type=refresh_token',{refresh_token:auth.refresh_token});auth={...d,user:d.user||auth.user};saveAuth();return true}catch{auth=null;saveAuth();updateAccountUI();return false}}
 async function rest(path,options={}){if(!await ensureToken())throw new Error('请重新登录');let r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{...options,headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+auth.access_token,'Content-Type':'application/json',...(options.headers||{})}});if(!r.ok){let d=await r.json().catch(()=>({}));throw new Error(d.message||d.hint||'云端请求失败')}return r}
-function cloudPayload(e){return{title:e.title,text:e.text,history:e.history||[],wrong:e.wrong||{},group:e.group,tags:e.tags,recent:e.recent,createdAt:e.createdAt}}
+function cloudPayload(e){return{title:e.title,text:e.text,history:e.history||[],wrong:e.wrong||{},group:e.group,tags:e.tags,recent:e.recent,createdAt:e.createdAt,weParts:e.weParts,weFormat:e.weFormat}}
 async function uploadEssay(e){
   const user=jwtPayload(auth.access_token).sub;if(!user)throw new Error('登录信息无效');
   const sentAt=e.updatedAt;
@@ -266,6 +312,7 @@ function mergeRemote(rows){
   });
   if(!state.essays.length)state.essays.push(emptyEssay());
   if(!state.essays.some(e=>e.id===state.current))state.current=state.essays[0].id;
+  state.weTemplates=WE.normalizeTemplates(state.weTemplates,state.essays);
 }
 
 async function syncAll(silent=false){
@@ -297,18 +344,20 @@ function openEditor(id=null){
   $('editCreatedAt').value=e?dateInput(e.createdAt):dateInput(now());
   $('editCloud').checked=!!e?.cloud;
   $('deleteEssay').classList.toggle('hidden',!e);
+  WE.openEditor(e);
   $('editor').classList.remove('hidden');
   $('editor').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function openCurrentEditor(){openEditor(current().id)}
 async function saveEditor(){
-  const title=$('editTitle').value.trim(),text=$('editText').value.trim();
+  const weFormat=Rich.prepareSave();if(!weFormat)return;
+  const title=$('editTitle').value.trim(),text=weFormat.source;
   if(!title||!text)return alert('请填写标题和文章原文');
   const e=editing?state.essays.find(e=>e.id===editing):null;
   if(editing&&!e)return alert('这篇文章已被删除，请重新打开文章库。');
   const date=$('editCreatedAt').value;
   const createdAt=e&&date===dateInput(e.createdAt)?e.createdAt:date||null;
-  const metadata={title,text,group:cleanGroup($('editGroup').value),tags:cleanTags($('editTags').value),recent:$('editRecent').checked,
+  const metadata={title,text,group:cleanGroup($('editGroup').value),tags:cleanTags($('editTags').value),recent:$('editRecent').checked,weParts:WE.editorParts(text),weFormat,
     createdAt:!e&&date===dateInput(now())?now():createdAt};
   const wantCloud=loggedIn()?$('editCloud').checked:!!e?.cloud;
   const before={id:current().id,text:current().text};
@@ -332,7 +381,7 @@ function updateView(){
 $('searchEssays').oninput=updateView;
 $('resetFilters').onclick=()=>{libraryView={...DEFAULT_VIEW};saveView();renderList()};
 
-document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{pct=+b.dataset.p;document.querySelectorAll('[data-p]').forEach(x=>x.classList.toggle('active',x===b));updateControls();renderPractice()});
+document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{WE.setRate(+b.dataset.p);updateControls();renderPractice()});
 $('hint').onchange=applyHint;$('mode').onchange=()=>{updateControls();renderPractice()};$('regen').onclick=renderPractice;$('submit').onclick=submit;
 $('libraryBtn').onclick=()=>{renderList();$('library').classList.toggle('hidden')};$('accountBtn').onclick=openAuth;$('loginBtn').onclick=login;$('signupBtn').onclick=signup;$('logoutBtn').onclick=logout;$('syncNowBtn').onclick=()=>syncAll();
 $('uploadAllBtn').onclick=async()=>{if(confirm('将当前所有仅本机文章上传到云端？')){state.essays.forEach(e=>{e.cloud=true;e.dirty=true;e.updatedAt=now()});save();renderList();await syncAll()}};
@@ -363,5 +412,5 @@ $('importFile').onchange=async ev=>{
 };
 
 window.addEventListener('online',()=>syncAll(true));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncAll(true)});
-renderAll();save();if(loggedIn())syncAll(true);
+WE.init();renderAll();save();if(loggedIn())syncAll(true);
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
