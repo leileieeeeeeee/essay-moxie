@@ -62,6 +62,15 @@ function normalizeState(value){
     pendingDeletes:Array.isArray(value.pendingDeletes)?value.pendingDeletes:[]};
 }
 state=normalizeState(state);
+// Retire only the generated V3.8 question-bank entries, never user-created essays.
+// Keep a local recovery snapshot; cloud rows are hidden, not permanently deleted.
+try{
+  const legacyIds=Array.from({length:37},(_,i)=>'we-bank-v1-'+(i+1));
+  const legacy=new Set(legacyIds),snapshotKey='essay-moxie-retired-bank-v380';
+  if(state.essays.some(e=>legacy.has(e.id))&&!localStorage.getItem(snapshotKey))localStorage.setItem(snapshotKey,JSON.stringify(state));
+  const next=normalizeState({...state,essays:state.essays.filter(e=>!legacy.has(e.id)),hiddenCloud:[...new Set([...state.hiddenCloud,...legacyIds])]});
+  localStorage.setItem(KEY,JSON.stringify(next));state=next;
+}catch{ /* Storage errors must not discard the original state. */ }
 
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
 function saveAuth(){auth?localStorage.setItem(AUTH_KEY,JSON.stringify(auth)):localStorage.removeItem(AUTH_KEY)}

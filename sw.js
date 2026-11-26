@@ -1,5 +1,5 @@
-const CACHE='essay-moxie-v3.9.0';
-const ASSETS=['./','./index.html','./rich.js?v=371','./we.js?v=371','./app.js?v=380','./manifest.webmanifest','./core-bank.js?v=390','./materials.js?v=390'];
+const CACHE='essay-moxie-v3.9.1';
+const ASSETS=['./','./index.html','./rich.js?v=371','./we.js?v=371','./app.js?v=391','./manifest.webmanifest','./core-bank.js?v=390','./materials.js?v=390'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
