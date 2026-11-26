@@ -26,6 +26,7 @@ input.title{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px}
 button:disabled,select:disabled{opacity:.48;cursor:not-allowed}
 .status{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:#f2f4f7;font-size:12px;color:#475467}.status.cloud{background:#ecfdf3;color:#027a48}.status.pending{background:#fffaeb;color:#b54708}
 dialog{border:0;border-radius:18px;padding:0;box-shadow:0 24px 80px #10182840;width:min(92vw,460px)}dialog::backdrop{background:#10182873}.dialogBody{padding:18px}.dialogBody h3{margin:0 0 12px}.dialogBody input{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:11px;margin:5px 0}.dialogActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+#bankFields textarea{width:100%;border:1px solid #d0d5dd;border-radius:10px;padding:9px;margin-bottom:8px;font-size:16px;resize:vertical}#bankFields>select{max-width:100%;margin:4px 6px 4px 0}#bankPracticeDialog,#bankImportDialog{max-height:88dvh;overscroll-behavior:contain}
 .switchRow{display:flex;align-items:center;gap:8px;margin-top:10px}.switchRow input{width:20px;height:20px}.syncDot{width:8px;height:8px;border-radius:50%;background:#98a2b3;display:inline-block}.syncDot.ok{background:#12b76a}.syncDot.busy{background:#f79009}
 @media(max-width:560px){.practice{font-size:17px;line-height:2.5}.card{padding:14px}.wrap{padding-left:9px;padding-right:9px}.desktopText{display:none}}
 .version{font-size:11px;color:#667085;font-weight:500;vertical-align:middle}
@@ -59,11 +60,11 @@ details>summary{cursor:pointer;color:#475467;font-size:14px;padding:8px 0}detail
 <body>
 <div class="wrap">
   <div class="card">
-    <div class="row"><div class="grow"><h1>Essay 默写 <small class="version">V3.7.1</small></h1><div class="muted"><span id="syncDot" class="syncDot"></span> <span id="syncText">本地模式</span></div></div><button class="btn" id="accountBtn">登录同步</button><button class="btn" id="libraryBtn">文章库</button></div>
+    <div class="row"><div class="grow"><h1>Essay 默写 <small class="version">V3.7.2</small></h1><div class="muted"><span id="syncDot" class="syncDot"></span> <span id="syncText">本地模式</span></div></div><button class="btn" id="accountBtn">登录同步</button><button class="btn" id="libraryBtn">文章库</button></div>
   </div>
 
   <div id="library" class="card hidden">
-    <div class="row"><b class="grow">文章库</b><button class="btn" id="libraryTemplates">WE 四套模板</button><button class="btn primary" id="addBtn">＋ 添加文章</button></div>
+    <div class="row"><b class="grow">文章库</b><button class="btn" id="openBank">批量追加 WE 题库</button><button class="btn" id="libraryTemplates">WE 四套模板</button><button class="btn primary" id="addBtn">＋ 添加文章</button></div>
     <div class="filterGrid">
       <label class="field searchField">搜索<input id="searchEssays" type="search" placeholder="搜索名称、分组或标签"></label>
       <label class="field">分组<select id="filterGroup"><option value="">全部分组</option></select></label>
@@ -115,6 +116,7 @@ details>summary{cursor:pointer;color:#475467;font-size:14px;padding:8px 0}detail
     </div>
     <div id="currentMeta" class="badges"></div>
     <div class="muted" id="progressText"></div>
+    <div id="weBankDetail" class="hidden"><p id="weBankPrompt" style="white-space:pre-wrap"></p><p id="weBankNote" class="muted"></p><button class="btn" id="weBankPractice">素材套模板</button></div>
   </div>
 
   <div class="card">
@@ -151,7 +153,27 @@ details>summary{cursor:pointer;color:#475467;font-size:14px;padding:8px 0}detail
 
 <dialog id="templateDialog"><div class="dialogBody"><h3>WE 四套模板</h3><p class="templateHelp">把每套模板的固定句式粘贴进来，用 <code>{{主题}}</code>、<code>{{论点}}</code> 等占位符替代每篇会变化的内容。例如：<code>In conclusion, {{结论}}.</code></p><p class="templateHelp">保存模板后，回到文章编辑页选择模板并点击“按模板识别”。更新模板不会自动改动已经保存的文章标记。</p><div id="templateSlots"></div><p class="templateHelp">文章开启云同步后，其标记和使用的模板版本随文章同步；尚未用于文章的模板请通过“导出备份”保存。</p><div class="dialogActions"><button class="btn primary" id="saveTemplates">保存四套模板</button><button class="btn" data-close="templateDialog">取消</button></div></div></dialog>
 
-<script src="rich.js?v=371"></script>
-<script src="we.js?v=371"></script>
-<script src="app.js?v=371"></script>
+<dialog id="bankImportDialog"><div class="dialogBody">
+  <h3>批量追加 WE 题库</h3>
+  <p>选择 WE 题库文件。只添加新题，跳过重复，不替换文章、模板或成绩。</p>
+  <label class="field">WE 题库 JSON<input type="file" id="bankFile" accept=".json,application/json"></label>
+  <label class="switchRow"><input type="checkbox" id="bankCloud"> 导入到云端，并同步到其他设备</label>
+  <p class="muted" id="bankImportStatus" role="status" aria-live="polite"></p>
+  <div class="dialogActions"><button id="bankImport" class="btn primary" type="button" disabled>确认追加</button><button id="bankClose" class="btn" data-close="bankImportDialog" type="button">关闭</button></div>
+</div></dialog>
+<dialog id="bankPracticeDialog"><div class="dialogBody">
+  <h3>素材套模板</h3>
+  <p class="muted">试试同一主题的另一道题。素材是写作提示，论证链和例子短语需要先改成完整、贴题的英文，再填入模板。</p>
+  <label class="field">同题或同主题来源<select id="bankSource"></select></label>
+  <label class="field">论点卡<select id="bankCard"></select></label>
+  <div id="bankCardView" style="white-space:pre-wrap;overflow-wrap:anywhere"></div>
+  <label class="field" style="margin-top:12px">模板<select id="bankTemplate"></select></label>
+  <div id="bankFields"></div>
+  <p id="bankPreview" class="muted" style="white-space:pre-wrap;overflow-wrap:anywhere" role="status"></p>
+  <div class="dialogActions"><button type="button" id="bankPreviewBtn" class="btn">预览</button><button type="button" id="bankMake" class="btn primary">开始默写</button><button type="button" class="btn" data-close="bankPracticeDialog">取消</button></div>
+</div></dialog>
+<script src="we-bank.js?v=372"></script>
+<script src="rich.js?v=372"></script>
+<script src="we.js?v=372"></script>
+<script src="app.js?v=372"></script>
 </body></html>

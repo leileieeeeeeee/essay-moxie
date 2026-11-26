@@ -48,7 +48,7 @@ function normalizeEssay(e,fallback={}){
     history:Array.isArray(e.history)?e.history:[],wrong:e.wrong&&typeof e.wrong==='object'?e.wrong:{},
     cloud:!!e.cloud,dirty:!!e.dirty,updatedAt:validDate(e.updatedAt)||now(),
     group:cleanGroup(field('group')),tags:cleanTags(field('tags')),recent:field('recent')===true,createdAt,
-    weParts,weFormat};
+    weParts,weFormat,weBank:WEBank.validEntry(field('weBank'))?field('weBank'):null};
 }
 function emptyEssay(){
   return normalizeEssay({id:'local-'+uid(),title:'新文章',text:'请点击编辑文章并粘贴原文。',createdAt:now()});
@@ -179,6 +179,7 @@ function renderList(){
   });
 }
 function renderHeader(){
+  renderBankDetail();
   const e=current(),h=e.history||[];
   $('currentTitle').textContent=e.title;
   $('currentMeta').innerHTML=essayBadges(e);
@@ -289,7 +290,7 @@ function renderAll(refreshPractice=true){renderList();renderHeader();updateAccou
 async function authRequest(path,body){let r=await fetch(SUPABASE_URL+path,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.msg||data.message||data.error_description||'请求失败');return data}
 async function ensureToken(){if(!auth)return false;let p=jwtPayload(auth.access_token);if((p.exp||0)*1000>Date.now()+60000)return true;try{let d=await authRequest('/auth/v1/token?grant_type=refresh_token',{refresh_token:auth.refresh_token});auth={...d,user:d.user||auth.user};saveAuth();return true}catch{auth=null;saveAuth();updateAccountUI();return false}}
 async function rest(path,options={}){if(!await ensureToken())throw new Error('请重新登录');let r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{...options,headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+auth.access_token,'Content-Type':'application/json',...(options.headers||{})}});if(!r.ok){let d=await r.json().catch(()=>({}));throw new Error(d.message||d.hint||'云端请求失败')}return r}
-function cloudPayload(e){return{title:e.title,text:e.text,history:e.history||[],wrong:e.wrong||{},group:e.group,tags:e.tags,recent:e.recent,createdAt:e.createdAt,weParts:e.weParts,weFormat:e.weFormat}}
+function cloudPayload(e){return{title:e.title,text:e.text,history:e.history||[],wrong:e.wrong||{},group:e.group,tags:e.tags,recent:e.recent,createdAt:e.createdAt,weParts:e.weParts,weFormat:e.weFormat,weBank:e.weBank||undefined}}
 async function uploadEssay(e){
   const user=jwtPayload(auth.access_token).sub;if(!user)throw new Error('登录信息无效');
   const sentAt=e.updatedAt;
@@ -409,6 +410,170 @@ $('importFile').onchange=async ev=>{
     alert('导入成功');
   }catch{alert('备份文件无效')}
   finally{ev.target.value=''}
+};
+
+let bankEntries=[],bankFileVersion=0,bankBusy=false,bankSources=[];
+function bankStatus(message){$('bankImportStatus').textContent=message}
+function bankBlocked(rows=[]){
+  return [...state.pendingDeletes,...state.hiddenCloud,...rows.filter(r=>r.deleted_at).map(r=>r.client_id)];
+}
+function updateBankImport(){
+  const {add,skipped}=WEBank.plan(bankEntries,state.essays,bankBlocked());
+  $('bankImport').disabled=bankBusy||!add.length;
+  if(bankEntries.length)bankStatus(`文件有 ${bankEntries.length} 题；本机初步检查：可新增 ${add.length} 题，跳过 ${skipped} 题。`+
+     ($('bankCloud').checked?' 导入前会再检查云端。':' 仅保存到此浏览器。'));
+}
+$('openBank').onclick=()=>{
+  if(bankBusy)return;
+  bankFileVersion++;bankEntries=[];$('bankFile').value='';
+  $('bankCloud').checked=loggedIn();
+  $('bankCloud').disabled=!loggedIn();
+  bankStatus(loggedIn()?'请选择题库文件。':'未登录。可导入本机；要直接写入云端，请先关闭并登录原账号。');
+  updateBankImport();$('bankImportDialog').showModal();
+};
+$('bankFile').onchange=async ev=>{
+  const v=++bankFileVersion;
+  const file=ev.target.files[0];bankEntries=[];updateBankImport();
+  if(!file){bankStatus('请选择题库文件。');return}
+  bankStatus('正在检查题库…');
+  try{
+    if(file.size>5*1024*1024)throw new Error('WE 题库文件不能超过 5 MB。');
+    const entries=WEBank.parse(await file.text());
+    if(v!==bankFileVersion)return;
+    bankEntries=entries;updateBankImport();
+  }catch(e){if(v===bankFileVersion)bankStatus(e instanceof SyntaxError?'文件不是有效的 JSON。':e.message)}
+};
+$('bankCloud').onchange=updateBankImport;
+$('bankImportDialog').addEventListener('cancel',event=>{if(bankBusy)event.preventDefault()});
+function bankItem(e,cloud){
+  return normalizeEssay({id:e.id,title:e.title,group:'WE',tags:[...e.tags,e.type,'WE 主题题库'],
+    text:e.cards.length?[...new Set(e.cards.map(c=>c.point))].join('\n\n'):e.prompt,weBank:e,
+    cloud,dirty:false,createdAt:now(),updatedAt:now()});
+}
+async function fetchBankRows(user){
+  // Page through this account's records, including tombstones to avoid re-adding
+  // records explicitly deleted on another device.
+  const rows=[];
+  const prefix='essay_records?select=client_id,payload,updated_at,deleted_at&order=client_id.asc&user_id=eq.'+encodeURIComponent(user);
+  for(let page=0;page<100;page++){
+    const response=await rest(prefix+'&limit=100&offset='+page*100);
+    const batch=await response.json();
+    if(!Array.isArray(batch))throw new Error('无法核对云端题库。');
+    rows.push(...batch);
+    if(batch.length<100)return rows;
+  }
+  throw new Error('云端题库太大，未执行导入。');
+}
+$('bankImport').onclick=async()=>{
+  if(bankBusy||!bankEntries.length)return;
+  const cloud=$('bankCloud').checked;
+  bankBusy=true;$('bankImport').disabled=true;$('bankFile').disabled=true;$('bankCloud').disabled=true;$('bankClose').disabled=true;
+  let saved=0,skipped=0,ok=false,writeStarted=false;
+  try{
+    let rows=[],user='';
+    if(cloud){
+      if(syncing)throw new Error('正在同步，请等同步结束后重试。');
+      if(!await ensureToken()||!(user=jwtPayload(auth.access_token).sub))throw new Error('请先重新登录原账号，再导入云端。');
+      bankStatus('正在核对云端已有题目…');
+      rows=await fetchBankRows(user);
+    }
+    // Check device and cloud together. Existing rows are never sent back to the database.
+    const remote=rows.filter(r=>!r.deleted_at&&r.payload).map(r=>({ ...r.payload,id:r.client_id,group:cleanGroup(r.payload.group)}));
+    const plan=WEBank.plan(bankEntries,[...state.essays,...remote],bankBlocked(rows));
+    skipped=plan.skipped;
+    const items=plan.add.map(e=>bankItem(e,cloud));
+    let add=items;
+    if(cloud&&items.length){
+      if(jwtPayload(auth?.access_token||'').sub!==user)throw new Error('登录账号变更，已停止导入。');
+      bankStatus('正在追加新题…');
+      const body=items.map(e=>({user_id:user,client_id:e.id,payload:cloudPayload(e),updated_at:e.updatedAt,deleted_at:null}));
+      writeStarted=true;
+      const res=await rest('essay_records?on_conflict=user_id,client_id&select=client_id',
+        {method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify(body)});
+      const inserted=new Set((await res.json()).map(r=>r.client_id));
+      add=items.filter(e=>inserted.has(e.id));
+      skipped+=items.length-add.length;
+    }
+    if(cloud&&jwtPayload(auth?.access_token||'').sub===user)mergeRemote(rows);
+    const ids=new Set(state.essays.map(e=>e.id));
+    state.essays.push(...add.filter(e=>!ids.has(e.id)));
+    save();renderAll();saved=add.length;ok=true;
+  }catch(e){
+    bankStatus(writeStarted?'未能确认导入结果：'+e.message+'。云端可能已收到；重新导入会先核对并跳过重复。':e.message);
+  }finally{
+    bankBusy=false;$('bankFile').disabled=false;$('bankClose').disabled=false;$('bankCloud').disabled=!loggedIn();
+    if(ok){bankEntries=[];$('bankFile').value='';bankStatus(`已${cloud?'写入云端':'追加到本机'} ${saved} 题，跳过 ${skipped} 题。没有覆盖已有文章。用文章库的“标签”按主题找题。`)}
+    $('bankImport').disabled=ok||!WEBank.plan(bankEntries,state.essays,bankBlocked()).add.length;
+  }
+};
+function renderBankDetail(){
+  const e=current().weBank;
+  $('weBankDetail').classList.toggle('hidden',!e);
+  if(!e)return;
+  $('weBankPrompt').textContent=e.prompt;
+  $('weBankNote').textContent=e.cards.length?'原题 · '+e.type+' · '+e.cards.length+' 张论点卡（不是完整范文）':'原题 · 原文件只有题干，可选同主题题目的素材。';
+}
+function bankCard(){
+  return bankSources[+$('bankSource').value]?.cards[+$('bankCard').value];
+}
+function renderBankCard(){
+  const c=bankCard();
+  const lines=a=>a.map(x=>[x.zh,x.en.join(' → ')].filter(Boolean).join('\n')).join('\n');
+  $('bankCardView').textContent=c?[c.point,c.reason.length?'论证：\n'+lines(c.reason):'',c.example.length?'例子：\n'+lines(c.example):''].filter(Boolean).join('\n\n'):'该题没有论点卡。可切换到同主题题目，或填入自己的论点。';
+}
+function renderBankSources(){
+  const cards=bankSources[+$('bankSource').value]?.cards||[];
+  $('bankCard').innerHTML=cards.length?cards.map((c,i)=>`<option value="${i}">${esc([c.side,c.label].filter(Boolean).join(' · '))}${c.priority?' ★':''}</option>`).join(''):'<option value="">无</option>';
+  renderBankCard();
+}
+function bankTemplate(){
+  return state.weTemplates.find(t=>t.id===$('bankTemplate').value)||{text:WEBank.paragraph};
+}
+function renderBankFields(){
+  $('bankPreview').textContent='';
+  const fields=WEBank.fields(bankTemplate().text);
+  $('bankFields').innerHTML=fields.map((name,i)=>`<label class="field">${esc(name)}<textarea rows="2" maxlength="1500" data-bank-field="${i}"></textarea></label>`).join('');
+  if(!fields.length){$('bankFields').textContent='这套模板未标注空格。请在“四套模板”用 {{论点}} 等标记可替换的文字，或选正文段练习。';return}
+  const button=document.createElement('button');button.type='button';button.className='smallBtn';button.textContent='把选中的英文论点放入空格';
+  const field=document.createElement('select');field.setAttribute('aria-label','要填入的空格');
+  field.innerHTML=fields.map((name,i)=>`<option value="${i}">${esc(name)}</option>`).join('');
+  button.onclick=()=>{
+    const c=bankCard();if(!c)return;
+    const i=+field.value;
+    const area=$('bankFields').querySelector(`[data-bank-field="${i}"]`);
+    area.value=c.point;area.focus();$('bankPreview').textContent='';
+  };
+  $('bankFields').append(field,button);
+}
+$('weBankPractice').onclick=()=>{
+  const entry=current().weBank;if(!entry)return;
+  const all=[...new Map(state.essays.filter(e=>e.weBank).map(e=>[e.weBank.id,e.weBank])).values()];
+  bankSources=WEBank.related(entry,all);
+  $('bankSource').innerHTML=bankSources.map((e,i)=>`<option value="${i}">${i===0?'本题：':'同主题：'}${esc(e.title)}</option>`).join('');
+  $('bankTemplate').innerHTML='<option value="">正文段练习（论点 → 解释 → 例子）</option>'+
+    state.weTemplates.filter(t=>t.text.trim()).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  renderBankSources();renderBankFields();$('bankPracticeDialog').showModal();
+};
+$('bankSource').onchange=renderBankSources;$('bankCard').onchange=renderBankCard;$('bankTemplate').onchange=renderBankFields;
+function bankBuild(){
+  const t=bankTemplate(),names=WEBank.fields(t.text);
+  if(!names.length)throw new Error('请选择含可替换空格的模板。');
+  const values=Object.create(null);
+  for(const [i,name] of names.entries())values[name]=$('bankFields').querySelector(`[data-bank-field="${i}"]`).value;
+  const {text,fixed}=WEBank.fill(t.text,values);
+  const templateWords=WE.wordSpans(text).filter(w=>fixed.some(([a,b])=>w.start>=a&&w.end<=b)).map(w=>w.index);
+  return {text,weParts:{source:text,confirmed:true,template:t.id?t:null,templateWords}};
+}
+$('bankPreviewBtn').onclick=()=>{try{$('bankPreview').textContent=bankBuild().text}catch(e){$('bankPreview').textContent=e.message}};
+$('bankMake').onclick=()=>{
+  try{
+    const draft=bankBuild(),source=current();
+    const existing=state.essays.find(e=>!e.weBank&&e.title===source.title+' · 模板练习'&&e.text===draft.text);
+    if(existing){$('bankPracticeDialog').close();chooseEssay(existing.id);return}
+    const item=normalizeEssay({...draft,id:'e-'+uid(),title:source.title+' · 模板练习',group:'WE',
+      tags:source.tags,createdAt:now(),cloud:false});
+    state.essays.unshift(item);$('bankPracticeDialog').close();chooseEssay(item.id);
+  }catch(e){$('bankPreview').textContent=e.message}
 };
 
 window.addEventListener('online',()=>syncAll(true));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncAll(true)});
