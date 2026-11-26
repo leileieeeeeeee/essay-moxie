@@ -48,7 +48,7 @@ function normalizeEssay(e,fallback={}){
     history:Array.isArray(e.history)?e.history:[],wrong:e.wrong&&typeof e.wrong==='object'?e.wrong:{},
     cloud:!!e.cloud,dirty:!!e.dirty,updatedAt:validDate(e.updatedAt)||now(),
     group:cleanGroup(field('group')),tags:cleanTags(field('tags')),recent:field('recent')===true,createdAt,
-    weParts,weFormat};
+    weParts,weFormat,labHistory:Array.isArray(field('labHistory'))?field('labHistory'):[]};
 }
 function emptyEssay(){
   return normalizeEssay({id:'local-'+uid(),title:'新文章',text:'请点击编辑文章并粘贴原文。',createdAt:now()});
@@ -289,7 +289,7 @@ function renderAll(refreshPractice=true){renderList();renderHeader();updateAccou
 async function authRequest(path,body){let r=await fetch(SUPABASE_URL+path,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.msg||data.message||data.error_description||'请求失败');return data}
 async function ensureToken(){if(!auth)return false;let p=jwtPayload(auth.access_token);if((p.exp||0)*1000>Date.now()+60000)return true;try{let d=await authRequest('/auth/v1/token?grant_type=refresh_token',{refresh_token:auth.refresh_token});auth={...d,user:d.user||auth.user};saveAuth();return true}catch{auth=null;saveAuth();updateAccountUI();return false}}
 async function rest(path,options={}){if(!await ensureToken())throw new Error('请重新登录');let r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{...options,headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+auth.access_token,'Content-Type':'application/json',...(options.headers||{})}});if(!r.ok){let d=await r.json().catch(()=>({}));throw new Error(d.message||d.hint||'云端请求失败')}return r}
-function cloudPayload(e){return{title:e.title,text:e.text,history:e.history||[],wrong:e.wrong||{},group:e.group,tags:e.tags,recent:e.recent,createdAt:e.createdAt,weParts:e.weParts,weFormat:e.weFormat}}
+function cloudPayload(e){return{title:e.title,text:e.text,history:e.history||[],wrong:e.wrong||{},group:e.group,tags:e.tags,recent:e.recent,createdAt:e.createdAt,weParts:e.weParts,weFormat:e.weFormat,labHistory:e.labHistory||[]}}
 async function uploadEssay(e){
   const user=jwtPayload(auth.access_token).sub;if(!user)throw new Error('登录信息无效');
   const sentAt=e.updatedAt;
