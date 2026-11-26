@@ -1,12 +1,12 @@
-const CACHE='essay-moxie-v3.7.1';
-const ASSETS=['./','./index.html','./rich.js?v=371','./we.js?v=371','./app.js?v=371','./manifest.webmanifest'];
+const CACHE='essay-moxie-v3.7.2';
+const ASSETS=['./','./index.html','./rich.js?v=372','./we-bank.js?v=372','./we.js?v=372','./app.js?v=372','./manifest.webmanifest'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
 });
 
 self.addEventListener('activate',event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('essay-moxie-v')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
 });
 
 self.addEventListener('fetch',event=>{
